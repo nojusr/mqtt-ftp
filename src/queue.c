@@ -24,7 +24,6 @@ void q_req_enqueue(struct q_req *queue, struct mqtt_ftp_req *request) {
     nptr->next = NULL;
 
     if (queue->rear == NULL) {
-        printf("setting as nptr in rear.\n");
         queue->front = nptr;
         queue->rear = nptr;
     } else {
@@ -40,11 +39,20 @@ void q_req_dequeue(struct q_req *queue) {
         struct q_req_node *temp;
         temp = queue->front;
         queue->front = queue->front->next;
+        if (queue->front == NULL) { // clear queue rear if queue empty
+            queue->rear = NULL;
+        }
         free(temp);
     }
 }
 
 void debug_print_q_req_node(struct q_req_node *node) {
+
+    if (node == NULL) {
+        printf("(node is null)\n");
+        return;
+    }
+
     printf("node: \n  request:\n");
     if (node->request != NULL) {
         debug_print_request(node->request);
@@ -58,6 +66,11 @@ void debug_print_q_req_node(struct q_req_node *node) {
 void debug_print_q_req(struct q_req queue) {
     struct q_req_node *tmp = NULL;
     tmp = queue.rear;
+
+    if (queue.front == NULL) {
+        printf("queue is empty.\n");
+        return;
+    }
 
     while (1) {
         debug_print_q_req_node(tmp);

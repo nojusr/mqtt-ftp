@@ -1,3 +1,5 @@
+
+
 #include <asm-generic/errno-base.h>
 #include <mosquitto.h>
 #include <stdlib.h>
@@ -8,6 +10,7 @@
 #include <signal.h>
 
 #include "config.h"
+#include "queue.h"
 #include "request.h"
 #include "response.h"
 #include "handlers.h"
@@ -57,20 +60,56 @@ void handle_command_read(struct mqtt_ftp_req *request, struct mqtt_ftp_resp *res
 }
 
 void handle_command_write(struct mqtt_ftp_req *request, struct mqtt_ftp_resp *response) {
+    FILE *fp;
+
+    if( access( request->filepath, F_OK | W_OK ) != 0 ) {
+        if (errno == EACCES) {
+            response->rc = RESP_MISSING_PERMS;
+            return;
+        } else if (errno != ENOENT) {
+            response->rc = RESP_ERR;
+            return;
+        }
+    }
+
+    fp = fopen(request->filepath,"w+");
+
+    if (request->write_input != NULL && strlen(request->write_input) != 0) {
+        fputs(request->write_input, fp);
+    }
+
+    response->rc = RESP_OK;
+    response->output = NULL;
+    fclose(fp);
 
 }
 
+// the create command is pointless due to fopen behaviour. shouldn't be here, but hindsight is 20/20
 void handle_command_create(struct mqtt_ftp_req *request, struct mqtt_ftp_resp *response) {
-
+    request->write_input = NULL;
+    handle_command_write(request, response);
 }
 
 void handle_command_delete(struct mqtt_ftp_req *request, struct mqtt_ftp_resp *response) {
+    if( remove(request->filepath) != 0 ) {
+        if (errno == EACCES) {
+            response->rc = RESP_MISSING_PERMS;
+        } else if (errno == ENOENT) {
+            response->rc = RESP_NOT_FOUND;
+        } else {
+            response->rc = RESP_ERR;
+        }
 
+    } else {
+        response->rc = RESP_OK;
+    }
+
+    return;
 }
 
 void send_response_mqtt(const char *output, struct mosquitto *mosq, const struct mqtt_ftp_config *config) {
-    syslog(LOG_INFO, "publishing response `%s` to topic: \"%s\"", output, config->mosq_output_topic);
-    mosquitto_publish(mosq, NULL, config->mosq_output_topic, strlen(output), output, 1, false);
+    syslog(LOG_INFO, "Publishing response `%s` to topic: \"%s\"", output, config->mosq_output_topic);
+    mosquitto_publish(mosq, NULL, config->mosq_output_topic, strlen(output), output, 1, false); 
 }
 
 void send_response_socket(const char *output, const struct mqtt_ftp_config *config) {
@@ -125,10 +164,12 @@ void handle_request(struct mosquitto *mosq, struct mqtt_ftp_config *config) {
     }
 
     debug_print_response(response);
+    
 
     q_req_dequeue(&config->messages);
     
     const char *output = resp_to_str(response);
+    // TODO: check origin in response and direct to proper response location
     send_response_mqtt(output, mosq, config);
 
 }

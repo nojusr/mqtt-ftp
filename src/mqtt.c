@@ -1,12 +1,13 @@
 #include <mosquitto.h>
 #include <sys/syslog.h>
+#include <string.h>
 
 #include "request.h"
 #include "queue.h"
 #include "config.h"
 #include "mqtt.h"
 
-void mosq_full_init(struct mosquitto *mosq, struct mqtt_ftp_config *config) {
+void mosq_full_init(struct mosquitto **mosq, struct mqtt_ftp_config *config) {
     int rc;
 
     // If there's a need for a mqtt toggle functionality, check and return here
@@ -15,9 +16,9 @@ void mosq_full_init(struct mosquitto *mosq, struct mqtt_ftp_config *config) {
 
     mosquitto_lib_init();
 
-    mosq = mosquitto_new(NULL, true, config);
+    *mosq = mosquitto_new(NULL, true, config);
 
-    if (mosq == NULL) {
+    if (*mosq == NULL) {
         syslog(LOG_CRIT, "out of memory!");
         exit(1);
     }
@@ -26,21 +27,21 @@ void mosq_full_init(struct mosquitto *mosq, struct mqtt_ftp_config *config) {
     syslog(LOG_INFO, "SCOPE: mosq_full_init.");
     debug_print_mqtt_config(config);
 
-    mosquitto_connect_callback_set(mosq, mosq_on_connect);
-    mosquitto_subscribe_callback_set(mosq, mosq_on_sub);
-    mosquitto_message_callback_set(mosq, mosq_on_msg);
-    mosquitto_publish_callback_set(mosq, mosq_on_pub);
+    mosquitto_connect_callback_set(*mosq, mosq_on_connect);
+    mosquitto_subscribe_callback_set(*mosq, mosq_on_sub);
+    mosquitto_message_callback_set(*mosq, mosq_on_msg);
 
     syslog(LOG_INFO, "Connecting to %s:%d", config->mosq_host, config->mosq_port);
 
-    rc = mosquitto_connect(mosq, config->mosq_host, config->mosq_port, 60);
+
+
+    rc = mosquitto_connect(*mosq, config->mosq_host, config->mosq_port, 60);
     if(rc != MOSQ_ERR_SUCCESS){
-        mosquitto_destroy(mosq);
+        mosquitto_destroy(*mosq);
         syslog(LOG_ERR, "Mosquitto error: %s\n", mosquitto_strerror(rc));
         exit(1);
     }
-
-    mosquitto_loop_start(mosq);
+        
 }
 
 void mosq_on_connect(struct mosquitto *mosq, void *obj, int reason_code) {
@@ -96,12 +97,9 @@ void mosq_on_msg(struct mosquitto *mosq, void *obj, const struct mosquitto_messa
     req->origin = MQTT_FTP_REQ_ORIGIN_MQTT;
 
     if (req->id != -1) {
+        syslog(LOG_DEBUG, "REQUEST IS VALID.");
         //debug_print_request(req);
         q_req_enqueue(&(conf->messages), req);
         debug_print_q_req(conf->messages);
     }
-}
-
-void mosq_on_pub(struct mosquitto *mosq, void *obj, int mid) {
-	printf("Message with mid %d has been published.\n", mid);
 }

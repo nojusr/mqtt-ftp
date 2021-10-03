@@ -22,7 +22,7 @@ Run the daemon with a specified config (see `example.conf`), all input/output is
 }
 ```
 
-## Output format:
+### Output format:
 ```
 {
     "request_id": int,

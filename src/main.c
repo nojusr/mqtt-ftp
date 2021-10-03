@@ -37,9 +37,13 @@ int main(int argc, char *argv[]) {
 
     syslog(LOG_INFO, "SCOPE: main");
     debug_print_mqtt_config(config);
-    // init mosquitto
 
-    mosq_full_init(mosq, config);
+    // init mosquitto
+    mosq_full_init(&mosq, config);
+    mosquitto_loop_start(mosq);
+
+    //mosquitto_publish(mosq, NULL, "test/test", strlen("TEST"), "TEST", 2, false);
+    //syslog(LOG_INFO, "fuck");
 
     // daemon init
     struct sigaction action;
@@ -47,18 +51,13 @@ int main(int argc, char *argv[]) {
     action.sa_handler = term_proc;
     sigaction(SIGTERM, &action, NULL);
 
-    syslog(LOG_INFO, "Ready");
 
-    // line below segfaults.
-    // i have searched far and wide but i've yet to find the reason.
-    // this doesn't follow the requirements, but I don't have the time to look into this.
-    // mosquitto_loop_start(mosq);
+    syslog(LOG_INFO, "Ready");
 
     // main event loop
     while (deamonize) {
-        //mosquitto_loop(mosq, -1, 1);
         handle_request(mosq, config);
-        usleep(100000);
+        usleep(10000);
     }
 
     // clean up mosq
